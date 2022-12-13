@@ -1,0 +1,91 @@
+version: '3'
+services:
+  strapi:
+    image: strapi:latest
+    container_name: strapi
+    build: ./backend/
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_CLIENT: ${DATABASE_CLIENT}
+      DATABASE_HOST: strapiDB
+      DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_USERNAME: ${DATABASE_USERNAME}
+      DATABASE_PORT: ${DATABASE_PORT}
+      JWT_SECRET: ${JWT_SECRET}
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      NODE_ENV: ${NODE_ENV}
+    volumes:
+      - ./backend/config:/opt/app/config
+      - ./backend/src:/opt/app/src
+      - ./backend/uploads:/opt/app/public/uploads
+      - ./backend/package.json:/opt/package.json
+      - ./backend/yarn.lock:/opt/yarn.lock # Replace with package-lock.json if using npm
+      - ./backend/.env:/opt/app/.env
+    ports:
+      - "127.0.0.1:1337:1337"
+    networks:
+      - strapi
+    depends_on:
+      - strapiDB
+  
+  strapiDB:
+    image: postgres:12.0-alpine
+    container_name: strapiDB
+    # platform: linux/amd64 #for platform error on Apple M1 chips
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${DATABASE_USERNAME}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}
+      #PGDATA: /var/lib/pg_data
+    volumes:
+      - ./backend/strapi-data:/var/lib/postgresql/data/ #using a volume
+      #- ./backend/strapi-data:/var/lib/pg_data #using a volume
+      #- ./data:/var/lib/postgresql/data/ # if you want to use a bind folder
+    ports:
+      - "127.0.0.1:5432:5432"
+    networks:
+      - strapi
+
+  front:
+    image: front:dev
+    container_name: front
+    restart: unless-stopped
+    build: ./front/
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - WDS_SOCKET_PORT=0
+    volumes:
+      - ./front/src:/app/src
+    networks:
+      - strapi
+    depends_on:
+      - strapi
+
+  nginxBS:
+    image: nginx:latest
+    container_name: nginxBS
+    restart: unless-stopped
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    links:
+      - front:front
+      - strapi:strapi
+    depends_on:
+      - front
+      - strapi
+    networks:
+      - strapi
+
+#volumes:
+#  ./backend/strapi-data:
+networks:
+  strapi:
